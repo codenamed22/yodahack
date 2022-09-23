@@ -2,32 +2,51 @@ import requests
 import json
 from tkinter import *
 from PIL import ImageTk, Image
+from wordfreq import zipf_frequency
 
 suggestionList = set()
 
 def analyzeNode(node):
     deduction = 0
     infractions_added = 0
-    navigationPresent = False
+    navigation_present = False
+    help_present = False
     if "children" in node:
         node = node["children"]
         for curr in node:
+            if "help" in curr["name"]:
+                help_present = True
             type = curr["type"]
             if type == "TEXT":
+                text = curr["name"].split()
+                for words in text:
+                    frequency = zipf_frequency(words, 'en', wordlist='best', minimum=0.0)
+                    if frequency < 3:
+                        deduction = deduction + 1
+                        infractions_added = infractions_added + 1
+                        suggestionList.add("Word used is not a commonly used word")
                 analysis = textAnalyzer(curr['style'])
-                deduction = deduction - analysis[0]
+                deduction = deduction + analysis[0]
                 infractions_added = infractions_added + analysis[1]
             if type == "FRAME":
-                if curr["name"] == "Navigation Bar":
-                    navigationPresent = True
+                if "Navigation Bar" in curr["name"]:
+                    navigation_present = True
                 analysis = analyzeNode(curr)
+                deduction = deduction + analysis[0]
                 infractions_added = infractions_added + analysis[1]
             if type == "GROUP":
                 analysis = analyzeNode(curr)
+                deduction = deduction + analysis[0]
                 infractions_added = infractions_added + analysis[1]
 
-    if not navigationPresent:
+    if not navigation_present:
+        deduction = deduction + 1
+        infractions_added = infractions_added + 1
         suggestionList.add("Navigation bar not present in some frames")
+    if not help_present:
+        deduction = deduction - 1
+        infractions_added = infractions_added + 1
+        suggestionList.add("No help options present")
     return deduction, infractions_added
 
 
@@ -83,7 +102,8 @@ def callFigma():
     resultMarks.insert(0, str(marks))
     resultInfractions.delete(0, END)
     resultInfractions.insert(0, str(infractions))
-    resultSuggestion.insert(END, ', '.join(suggestionList))
+    for values in suggestionList:
+        resultSuggestion.insert(END, values)
 
 
 top = Tk()
@@ -116,8 +136,7 @@ resultMarks = Entry(top, text="Results", fg='blue', bd=5, width=25)
 resultMarks.place(x=230, y=310)
 resultInfractions = Entry(top, text="Infractions", fg='blue', bd=5, width=25)
 resultInfractions.place(x=230, y=330)
-resultSuggestion = Text(top, fg='blue', bd=5, width=25, height=4)
-resultSuggestion.place(x=230, y=370)
+resultSuggestion = Listbox(top, height=5, width=40)
 resultSuggestion.place(x=230, y=370)
 top.mainloop()
 
