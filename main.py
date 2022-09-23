@@ -1,13 +1,35 @@
-# This is a sample Python script.
-
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 import requests
 import json
 from tkinter import *
 from PIL import ImageTk, Image
 
 suggestionList = set()
+
+def analyzeNode(node):
+    deduction = 0
+    infractions_added = 0
+    navigationPresent = False
+    if "children" in node:
+        node = node["children"]
+        for curr in node:
+            type = curr["type"]
+            if type == "TEXT":
+                analysis = textAnalyzer(curr['style'])
+                deduction = deduction - analysis[0]
+                infractions_added = infractions_added + analysis[1]
+            if type == "FRAME":
+                if curr["name"] == "Navigation Bar":
+                    navigationPresent = True
+                analysis = analyzeNode(curr)
+                infractions_added = infractions_added + analysis[1]
+            if type == "GROUP":
+                analysis = analyzeNode(curr)
+                infractions_added = infractions_added + analysis[1]
+
+    if not navigationPresent:
+        suggestionList.add("Navigation bar not present in some frames")
+    return deduction, infractions_added
+
 
 
 def textAnalyzer(textNode):
@@ -42,25 +64,19 @@ def callFigma():
     textFieldEntry = txtfld.get()
     figmaUrl = "UQZm4M8tjARHlLjoRM0eZM"
 
-    if textFieldEntry !="" and (len(textFieldEntry) > 28):
+    if textFieldEntry != "" and (len(textFieldEntry) > 28):
         figmaUrl = textFieldEntry[27:49]
     else:
         txtfld.insert(END, "https://www.figma.com/file/UQZm4M8tjARHlLjoRM0eZM" )
 
-    # Use a breakpoint in the code line below to debug your script.
-    # api_url_node = 'https://api.figma.com/v1/files/UQZm4M8tjARHlLjoRM0eZM/nodes?ids=0:0'
     api_url_file = 'https://api.figma.com/v1/files/' + figmaUrl
     response_file = requests.get(api_url_file,
                                  headers={'X-Figma-Token': 'figd_ovii34p8XXnD-ypGWygDWk2NPJLRlVAxGmXS0ERS'})
-    # response_node = requests.get(api_url_node, headers={'X-Figma-Token': 'figd_ovii34p8XXnD-ypGWygDWk2NPJLRlVAxGmXS0ERS'})
 
-    curr = response_file.json()["document"]["children"][0]["children"]
-    for childNodes in curr:
-        if childNodes["type"] == "FRAME":
-            for propertyNodes in childNodes["children"]:
-                if propertyNodes["type"] == "TEXT":
-                    deduction, infractions_added = textAnalyzer(propertyNodes['style'])
-                    marks, infractions = marks - deduction, infractions + infractions_added
+    curr = response_file.json()["document"]["children"]
+    for docuChildren in curr:
+            deduction, infractions_added = analyzeNode(docuChildren)
+            marks, infractions = marks - deduction, infractions + infractions_added
     if marks < 0:
         marks = 0
     resultMarks.delete(0, END)
@@ -68,12 +84,6 @@ def callFigma():
     resultInfractions.delete(0, END)
     resultInfractions.insert(0, str(infractions))
     resultSuggestion.insert(END, ', '.join(suggestionList))
-
-    f = open("hack.txt", "a")
-    f.write(json.dumps(response_file.json(), indent=4))
-    # f.write("\n ----------------------Node--------------------------\n")
-    # f.write(json.dumps(response_node.json(), indent=4))
-    f.close()
 
 
 top = Tk()
